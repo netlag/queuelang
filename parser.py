@@ -48,7 +48,6 @@ def symbolstart(char, state):
         char.isidentifier() or char in "'_"
     )
 
-
 def symbolcont(char, state):
     return state == State.SYMBOL and (
         char.isidentifier() or char.isdecimal()
@@ -62,7 +61,9 @@ def symbolscont(char, state):
     )
 
 def symbolspace(char, state):
-    return state == State.SYMBOL and char.isspace()
+    #return state == State.SYMBOL and char.isspace()
+    # currently preventing entry to SSPACE state
+    return state == State.SSPACE and char.isspace()
 
 def symbolskip(char, state):
     return state == State.SSPACE and char.isspace()
@@ -364,7 +365,8 @@ def repl(*args, **kwargs):
     prompt = "*> "
     textprompt = "+> \""
     context = Context()
-    code = None
+    code = (kwargs["code"] if "code" in kwargs else None)
+    #print("CODE\n", code, "ENDCODE\n");
 
     while True:
         # if we had been in a token, end it
@@ -376,8 +378,8 @@ def repl(*args, **kwargs):
             printcontext(context)
 
         try:
-            code = input(
-                prompt if not context.state == State.TEXT else textprompt)
+            if not code:
+                code = input(prompt if not context.state == State.TEXT else textprompt)
         except EOFError:
             print("EOF")
             break  # exit repl
