@@ -8,6 +8,12 @@ import sys
 import time
 from enum import Enum
 
+# this is to distinguish from debug
+def telluser(*args, **kwargs):
+    print(args, kwargs);
+
+def debug(*args, **kwargs):
+    print(args, kwargs);
 
 class State(Enum):
     NONE = 0
@@ -76,8 +82,11 @@ def numberstart(char, state):
     return state in [State.NONE, State.NSIGN] and char.isdecimal()
 
 
+def numtosym(char, state):
+    return state == State.NUMBER and char.isidentifier() or char in "'_"
+
 def numbercont(char, state):
-    return state == State.NUMBER and char.isdecimal()
+    return state == State.NUMBER and char.isdecimal() or char in "_"
 
 
 def decstart(char, state):
@@ -118,7 +127,7 @@ def textend(char, state):
 
 class Context:
     token = ""
-    queue = []
+    queue = list()
     symtab = {}
     state = State.NONE
 
@@ -131,7 +140,6 @@ def processtoken(context):
         return
 
     if not len(context.token) > 0:
-        print("Ignoring empty token")
         return
 
     tokentype = TokenType.NONE
@@ -146,54 +154,50 @@ def processtoken(context):
     else:
         tokentype = TokenType.OPER
 
-    #print("Processing Token: ", tokentype.chr(), context.token)
-
     evaltoken(context.token, tokentype, context)
     cleartoken(context)
 
 
 def cleartoken(context):
-    #print("Token cleared: ", context.token)
     context.token = ""
     context.state = State.NONE
 
 
 # add token to queue, or process operator
 def evaltoken(token, tokentype, context):
-    queue = context.queue
-    #print("Eval: ", tokentype.chr(), token)
 
     if tokentype != TokenType.OPER:
-        # evaluates to itself
-        queue.append((tokentype, token))
-        #print("Appended New Token: ", context.token)
+        context.queue.append((tokentype, token))
     elif token == "@":
-        context.queue = (TokenType.QUEUE, queue)
-    elif token == "*" and len(queue) > 0 and queue[-1][0] == TokenType.QUEUE:
-        v = queue.pop()
-        queue.extend(v[1])
-        #print("Exploded: ", v)
-    elif token == "*" and len(queue) > 0 and queue[-1][0] == TokenType.SYMBOL:
-        symbol = queue[-1][1]
+        oldqueue = context.queue
+        context.queue = list()
+        context.queue.append((TokenType.QUEUE, oldqueue))
+        telluser(context.queue, context)
+    elif token == "*" and len(context.queue) > 0 and context.queue[-1][0] == TokenType.QUEUE:
+        v = context.queue.pop()
+        context.queue.extend(v[1])
+    elif token == "*" and len(context.queue) > 0 and context.queue[-1][0] == TokenType.SYMBOL:
+        symbol = context.queue[-1][1]
         try:
             symval = context.symtab[symbol.lower()]
         except KeyError:
-            print("Symbol undefined: ", symbol)
+            telluser("Symbol undefined: ", symbol)
             symval = (TokenType.ERROR, '')
-        queue[-1] = symval
-    elif token == "=" and len(queue) > 1 and queue[-1][0] == TokenType.SYMBOL:
-        symbol = queue[-1][1]
-        context.symtab[symbol.lower()] = queue[-2]
-        v = queue.pop()
-        v2 = queue.pop()
-        print("Assigned: ", v[1], v2)
-    elif token == "~" and len(queue) > 0:
-        v = queue.pop()
-        print("Deleted: ", v[0].chr(), v[1].encode())
+        context.queue[-1] = symval
+    elif token == "=" and len(context.queue) > 1 and context.queue[-1][0] == TokenType.SYMBOL:
+        symbol = context.queue[-1][1]
+        context.symtab[symbol.lower()] = context.queue[-2]
+        v = context.queue.pop()
+        v2 = context.queue.pop()
+        telluser("Assigned: ", v[1], v2)
+    elif token == "~" and len(context.queue) > 0:
+        # TODO: probably should throw an error if nothing to delete
+        v = context.queue.pop()
+        telluser("Deleted: ", v[0].chr(), v[1].encode())
     else:
         # mark leftovers an error
-        queue.append((tokentype, token))
-        print("Meaningless token: ", token)
+        context.queue.append((tokentype, token))
+        telluser("Meaningless token: ", token)
     #endif
 
 ###################################
@@ -207,91 +211,92 @@ def parse(context=Context(), code=""):
     # ok to start in a string but not a symbol/number
     assert (context.state in (State.NONE, State.TEXT))
 
-    #if len(context.token) > 0:
-    #    print("Processing legacy token: ", context.token)
-    #    processtoken(context)
-
     # TODO: Fix error with parsing "123abc"
     for char in code:
         if textend(char, context.state):
-            #print("TEXTEND")
+            #debug("TEXTEND")
             context.token += char
             context.state = State.TEND
             processtoken(context)
             continue
         elif textcont(char, context.state):
-            #print("TEXTCONT")
+            #debug("TEXTCONT")
             context.token += char
             continue
         elif symbolcont(char, context.state):
-            #print("SYMBOLCONT")
+            #debug("SYMBOLCONT")
             context.token += char
             continue
         elif symbolscont(char, context.state):
-            #print("SYMBOLSCONT")
+            #debug("SYMBOLSCONT")
             context.state = State.SYMBOL
             context.token += " "
             context.token += char
             continue
         elif symbolspace(char, context.state):
             context.state = State.SSPACE
-            #print("SYMBOLSPACE")
+            #debug("SYMBOLSPACE")
             #context.token += " "  # replace char
             continue
         elif symbolskip(char, context.state):
             # discard extra whitespace in symbol
-            #print("SYMBOLSPACESKIP")
+            #debug("SYMBOLSPACESKIP")
             #context.token += char
             continue
+        elif numtosym(char, context.state):
+            #debug("NUMTOSYM")
+            context.state = State.SYMBOL
+            context.token += char
+            continue
         elif numbercont(char, context.state):
-            #print("NUMBERCONT")
+            #debug("NUMBERCONT")
             context.state = State.NUMBER
             context.token += char
             continue
         elif deccont(char, context.state):
-            #print("DECCONT")
+            #debug("DECCONT")
             context.token += char
             continue
         elif fraccont(char, context.state):
-            #print("FRACCONT")
+            #debug("FRACCONT")
             context.token += char
             continue
         elif expcont(char, context.state):
-            #print("EXPCONT")
+            #debug("EXPCONT")
             context.token += char
             continue
         elif numberstart(char, context.state):
-            #print("NUMBERSTART")
+            #debug("NUMBERSTART")
             context.state = State.NUMBER
             context.token += char
             continue
         elif symbolstart(char, context.state):
-            #print("SYMBOLSTART")
+            #debug("SYMBOLSTART")
             context.state = State.SYMBOL
             context.token += char
             continue
         elif signstart(char, context.state):
-            #print("SIGNSTART")
+            #debug("SIGNSTART")
             context.state = State.NSIGN
             context.token += char
             continue
         elif decstart(char, context.state):
-            #print("DECSTART")
+            #debug("DECSTART")
             context.state = State.NDEC
             context.token += char
             continue
         elif fracstart(char, context.state):
-            #print("FRACSTART")
+            #debug("FRACSTART")
             context.state = State.NFRAC
             context.token += char
             continue
         elif expstart(char, context.state):
-            #print("EXPSTART")
+            #debug("EXPSTART")
             context.state = State.NEXP
             context.token += char
             continue
         elif textstart(char, context.state):
-            #print("TEXTSTART")
+            #debug("TEXTSTART")
             context.state = State.TEXT
             context.token += char
             continue
@@ -304,11 +309,11 @@ def parse(context=Context(), code=""):
 
         # skip spaces
         if char.isspace():
-            #print("SPACE")
+            #debug("SPACE")
             continue
 
         # all other chars are singleton
-        #print("OPER")
+        #debug("OPER")
         context.token += char
         context.state = State.NONE
         processtoken(context)
@@ -326,77 +331,67 @@ def parse(context=Context(), code=""):
 
 
 ################################
-def printcontext(context):
+def tellcontext(context):
     if not context:
-        #print("Current Context: ", context)
         return
-    #print("Current Context:")
-    #print("State: ", context.state.chr())
     if len(context.token) > 0:
-        print("Token: ", context.tokentype.chr(), context.token.encode())
+        telluser("Token: ", context.tokentype.chr(), context.token.encode())
     if context.state == State.TEXT:
-        print("Partial Text: ", context.token.encode())
+        telluser("Partial Text: ", context.token.encode())
 
-    printqueue(context.queue)
+    tellqueue(context.queue)
 
 
-def printqueue(queue=[], depth=0):
+def tellqueue(queue=list(), depth=0):
     if not queue:
-        print(queue)
+        #telluser(queue)
         return
     for qtup in queue:
         if qtup[0] == TokenType.QUEUE:
             for i in range(depth):
-                print(" ", end="")
-            print("[")
-            printqueue(qtup[1], depth + 1)
+                telluser(" ", end="")
+            telluser("[")
+            tellqueue(qtup[1], depth + 1)
             for i in range(depth):
-                print(" ", end="")
-            print("]")
+                telluser(" ", end="")
+            telluser("]")
         else:
             for i in range(depth):
-                print(" ", end="")
-            print(" ", qtup[0].chr(), qtup[1].encode())
+                telluser(" ", end="")
+            telluser(" ", qtup[0].chr(), qtup[1].encode())
 
 
 ###############################
 def repl(*args, **kwargs):
 
-    prompt = "*> "
+    times = (kwargs["times"] if "times" in kwargs else "*")
+    prompt = str(times) + "> "
     textprompt = "+> \""
     context = Context()
     code = (kwargs["code"] if "code" in kwargs else None)
-    #print("CODE\n", code, "ENDCODE\n");
 
     while True:
-        # if we had been in a token, end it
-        #if len(context.token) > 0 and context.state == State.NONE:
-        #    processtoken(context)
 
         # reprinting the queue is too noisy while entering multiline text
         if not context.state == State.TEXT:
-            printcontext(context)
+            tellcontext(context)
 
         try:
             if not code:
                 code = input(prompt if not context.state == State.TEXT else textprompt)
         except EOFError:
-            print("EOF")
+            telluser("EOF")
             break  # exit repl
         except KeyboardInterrupt:
-            print("Interrupt")
+            telluser("Interrupt")
             # discard partial tokens
             cleartoken(context)
             continue
-            #try:
-        #    newcontext = parse(context=context, code=code)
-        #except:
-        #    print("Parse Error: ", sys.exc_info())
 
         newcontext = parse(context=context, code=code)
         if not newcontext:
-            print("Failed to rebuild context")
-            print("Code lost: ", code)
+            telluser("Failed to rebuild context")
+            telluser("Code lost: ", code)
             continue
 
         code = None
@@ -408,19 +403,18 @@ def repl(*args, **kwargs):
     if context.state == State.TEXT:
         context.token += "\""
         context.state = State.TEND
-        print("Forced text termination")
+        telluser("Forced text termination")
 
     if len(context.token) > 0:
         processtoken(context)
 
-    print("Final Context:")
-    printcontext(context)
-    #input("Hit Enter to Reload...")
-
+    telluser("Final Context:")
+    tellcontext(context)
 
 ########## MAIN ##################
 
 if (__name__ == "__main__"):
     repl(sys.argv)
 else:
-    print("parser loaded", time.time())
+    #debug("parser loaded", time.time())
+    ...
