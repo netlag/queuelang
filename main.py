@@ -8,10 +8,11 @@ import parser
 
 def main(*args, **kwargs):
 
-    try:
-        modname = os.environ["testing_mod"]
-    except Exception:
-        modname = "QL.parser"
+    modname = None
+    #try:
+    #    modname = os.environ["testing_mod"]
+    #except Exception:
+    #    modname = "QL.parser"
 
     parser = importlib.import_module(modname if modname else "parser")
     #print(parser)
@@ -20,7 +21,7 @@ def main(*args, **kwargs):
     while True:
 
         try:
-            parser.repl()
+            parser.repl(sys.argv)
 
         except:
             print(sys.exc_info())
@@ -41,6 +42,7 @@ def main(*args, **kwargs):
 ########## MAIN ##################
 
 if (__name__ == "__main__"):
-    parser.repl(sys.argv)
-else:
-    parser.repl()
+    #parser.repl()
+    # tries to reload parser between repls
+    main(sys.argv)
+    ...
