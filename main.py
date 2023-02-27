@@ -15,19 +15,20 @@ def main(*args, **kwargs):
     #    modname = "QL.parser"
 
     parser = importlib.import_module(modname if modname else "parser")
-    #print(parser)
 
-    times = 1
+    times = 0
     while True:
+        times += 1
+        print(parser)
 
         try:
-            parser.repl(sys.argv)
+            parser.repl(sys.argv, times=times)
 
         except:
             print(sys.exc_info())
 
         try:
-            input("Hit enter to reload parser> ")
+            input("Hit enter to reload parser, or ^D> ")
         except KeyboardInterrupt:
             print("Interrupted")
             break
@@ -42,7 +43,5 @@ def main(*args, **kwargs):
 ########## MAIN ##################
 
 if (__name__ == "__main__"):
-    #parser.repl()
-    # tries to reload parser between repls
     main(sys.argv)
     ...
